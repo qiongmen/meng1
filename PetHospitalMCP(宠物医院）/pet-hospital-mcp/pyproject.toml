@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pet-hospital-mcp"
+version = "1.0.0"
+description = "MCP 服务：将 Go 宠物医院 REST API 暴露给 AI Agent（MCP 2026-07-28，SDK 2.x MCPServer）"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp==2.0.0",
+    "httpx",
+    "pydantic",
+]
+readme = "README.md"
+
+[project.scripts]
+pet-hospital-mcp = "pet_hospital_mcp.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
