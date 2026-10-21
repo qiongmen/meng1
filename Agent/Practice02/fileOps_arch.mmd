@@ -1,0 +1,76 @@
+graph TD
+    START([程序启动]) --> INIT[读取 config.ini<br/>初始化 OpenAI 客户端]
+    INIT --> OUTER_LOOP{外层循环<br/>while True}
+
+    OUTER_LOOP --> USER_INPUT[等待用户输入<br/>input '你:' ]
+    USER_INPUT --> ADD_USER_MSG[追加到 messages<br/>role: user]
+
+    ADD_USER_MSG --> INNER_LOOP{内层循环<br/>while True}
+
+    INNER_LOOP --> LLM_CALL[LLM 流式调用<br/>client.chat.completions.create<br/>stream=True]
+    LLM_CALL --> STREAM_PARSE[流式解析 chunk]
+
+    STREAM_PARSE --> CHECK_DELTA{delta 内容判断}
+
+    CHECK_DELTA -->|delta.content| ACCUM_TEXT[累积文本内容<br/>实时打印]
+    CHECK_DELTA -->|delta.tool_calls| ACCUM_TC[构建 tool_calls 字典<br/>按 index 聚合 id / name / arguments]
+
+    ACCUM_TEXT --> MORE_CHUNK{还有更多 chunk?}
+    ACCUM_TC --> MORE_CHUNK
+    MORE_CHUNK -->|是| STREAM_PARSE
+    MORE_CHUNK -->|否| HAS_TOOL_CALLS{存在 tool_calls?}
+
+    HAS_TOOL_CALLS -->|否| ADD_ASSIST_MSG[追加 assistant 消息<br/>role: assistant, content]
+    ADD_ASSIST_MSG --> OUTER_LOOP
+
+    HAS_TOOL_CALLS -->|是| BUILD_TC_LIST[构建 assistant_tool_calls 列表<br/>含 id / type / function]
+    BUILD_TC_LIST --> ADD_ASSIST_TC_MSG[追加 assistant 消息<br/>含 tool_calls]
+
+    ADD_ASSIST_TC_MSG --> TC_DISPATCH[遍历 assistant_tool_calls<br/>解析 name + arguments]
+
+    TC_DISPATCH --> TOOL_MAP[tool_map 按 name 分发]
+
+    TOOL_MAP --> T1[getcwd<br/>获取当前工作目录]
+    TOOL_MAP --> T2[listdir<br/>列出目录内容]
+    TOOL_MAP --> T3[getFileType<br/>获取文件类型信息]
+    TOOL_MAP --> T4[readFile<br/>读取文本文件]
+    TOOL_MAP --> T5[createFile<br/>创建新文件]
+    TOOL_MAP --> T6[writeFile<br/>覆盖写入文件]
+    TOOL_MAP --> T7[mkdir<br/>创建目录]
+    TOOL_MAP --> T8[rmdir<br/>递归删除目录]
+    TOOL_MAP --> T9[rmFile<br/>删除文件]
+    TOOL_MAP --> T10[rename<br/>重命名文件/目录]
+
+    T1 --> TOOL_OUTPUT[获取工具返回结果<br/>output = tool_map name]
+    T2 --> TOOL_OUTPUT
+    T3 --> TOOL_OUTPUT
+    T4 --> TOOL_OUTPUT
+    T5 --> TOOL_OUTPUT
+    T6 --> TOOL_OUTPUT
+    T7 --> TOOL_OUTPUT
+    T8 --> TOOL_OUTPUT
+    T9 --> TOOL_OUTPUT
+    T10 --> TOOL_OUTPUT
+
+    TOOL_OUTPUT --> PRINT_TOOL[打印工具调用结果<br/>[tool] name → output]
+    PRINT_TOOL --> ADD_TOOL_MSG[追加 tool 消息<br/>role: tool, tool_call_id, content]
+
+    ADD_TOOL_MSG --> INNER_LOOP
+
+    style START fill:#4CAF50,color:#fff
+    style LLM_CALL fill:#2196F3,color:#fff
+    style STREAM_PARSE fill:#FF9800,color:#fff
+    style TOOL_MAP fill:#9C27B0,color:#fff
+    style T1 fill:#795548,color:#fff
+    style T2 fill:#795548,color:#fff
+    style T3 fill:#795548,color:#fff
+    style T4 fill:#795548,color:#fff
+    style T5 fill:#795548,color:#fff
+    style T6 fill:#795548,color:#fff
+    style T7 fill:#795548,color:#fff
+    style T8 fill:#795548,color:#fff
+    style T9 fill:#795548,color:#fff
+    style T10 fill:#795548,color:#fff
+    style OUTER_LOOP fill:#607D8B,color:#fff
+    style INNER_LOOP fill:#607D8B,color:#fff
+    style HAS_TOOL_CALLS fill:#E91E63,color:#fff

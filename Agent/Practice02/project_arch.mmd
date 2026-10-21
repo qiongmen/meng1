@@ -1,0 +1,304 @@
+------------------------------------------------------------------------
+  Practice02 · 项目整体代码架构图
+  基于 OpenAI Function Calling 的多工具对话系统
+------------------------------------------------------------------------
+
+═══════════════════════════════════════════════════════════════════════
+ 图 1：项目整体组件架构
+═══════════════════════════════════════════════════════════════════════
+
+graph TB
+    subgraph EXTERNAL["☁️ 外部服务"]
+        LLM_API["LLM API<br/>(SiliconFlow / OpenAI 兼容)"]
+    end
+
+    subgraph CONFIG["⚙️ 配置层"]
+        CFG_FILE["config.ini"]
+        LLM_SEC["[llm] section<br/>base_url · api_key · model"]
+    end
+
+    subgraph SHARED["♻️ 共享基础设施（3 个脚本均采用）"]
+        direction TB
+        CP["import configparser"]
+        CLIENT["OpenAI Client 实例<br/>base_url + api_key + model"]
+        STREAM["流式调用<br/>client.chat.completions.create<br/>stream=True"]
+        DUAL_LOOP["双层循环结构<br/>外层: 用户交互<br/>内层: 工具调用链"]
+        TC_PARSER["流式 tool_calls 聚合器<br/>按 index 合并 delta.function"]
+    end
+
+    CFG_FILE --> LLM_SEC --> CLIENT
+    CLIENT --> STREAM
+
+    subgraph SCRIPTS["📁 三个脚本（工具数量递增）"]
+        direction LR
+
+        subgraph S1["chat-stream.tool.getDate.py"]
+            T1_1["getDate<br/>调用系统 date 命令"]
+        end
+
+        subgraph S2["chat-stream.tool.getDate+isLeapYear.py"]
+            T2_1["getDate<br/>调用系统 date 命令"]
+            T2_2["isLeapYear<br/>闰年计算"]
+        end
+
+        subgraph S3["chat-stream.tool.fileOps.py"]
+            T3_1["getcwd"]
+            T3_2["listdir"]
+            T3_3["getFileType"]
+            T3_4["readFile"]
+            T3_5["createFile"]
+            T3_6["writeFile"]
+            T3_7["mkdir"]
+            T3_8["rmdir"]
+            T3_9["rmFile"]
+            T3_10["rename"]
+        end
+    end
+
+    STREAM --> TC_PARSER
+    TC_PARSER --> DUAL_LOOP
+    DUAL_LOOP --> S1
+    DUAL_LOOP --> S2
+    DUAL_LOOP --> S3
+
+    S1 -.->|tool_map dispatch| T1_1
+    S2 -.->|tool_map dispatch| T2_1
+    S2 -.->|tool_map dispatch| T2_2
+    S3 -.->|tool_map dispatch| T3_1
+    S3 -.->|tool_map dispatch| T3_2
+    S3 -.->|tool_map dispatch| T3_3
+    S3 -.->|tool_map dispatch| T3_4
+    S3 -.->|tool_map dispatch| T3_5
+    S3 -.->|tool_map dispatch| T3_6
+    S3 -.->|tool_map dispatch| T3_7
+    S3 -.->|tool_map dispatch| T3_8
+    S3 -.->|tool_map dispatch| T3_9
+    S3 -.->|tool_map dispatch| T3_10
+
+    T1_1 -.-> LLM_API
+    T2_1 -.-> LLM_API
+    T2_2 -.-> LLM_API
+    T3_1 -.-> LLM_API
+    T3_2 -.-> LLM_API
+    T3_3 -.-> LLM_API
+    T3_4 -.-> LLM_API
+    T3_5 -.-> LLM_API
+    T3_6 -.-> LLM_API
+    T3_7 -.-> LLM_API
+    T3_8 -.-> LLM_API
+    T3_9 -.-> LLM_API
+    T3_10 -.-> LLM_API
+
+    style EXTERNAL fill:#0D47A1,color:#fff
+    style CONFIG fill:#1B5E20,color:#fff
+    style SHARED fill:#4A148C,color:#fff
+    style SCRIPTS fill:#E65100,color:#fff
+    style S1 fill:#BF360C,color:#fff
+    style S2 fill:#BF360C,color:#fff
+    style S3 fill:#BF360C,color:#fff
+    style T1_1 fill:#546E7A,color:#fff
+    style T2_1 fill:#546E7A,color:#fff
+    style T2_2 fill:#546E7A,color:#fff
+    style T3_1 fill:#546E7A,color:#fff
+    style T3_2 fill:#546E7A,color:#fff
+    style T3_3 fill:#546E7A,color:#fff
+    style T3_4 fill:#546E7A,color:#fff
+    style T3_5 fill:#546E7A,color:#fff
+    style T3_6 fill:#546E7A,color:#fff
+    style T3_7 fill:#546E7A,color:#fff
+    style T3_8 fill:#546E7A,color:#fff
+    style T3_9 fill:#546E7A,color:#fff
+    style T3_10 fill:#546E7A,color:#fff
+
+
+═══════════════════════════════════════════════════════════════════════
+ 图 2：通用执行流程（三层控制流）
+═══════════════════════════════════════════════════════════════════════
+
+flowchart TD
+    START([🚀 程序启动]) --> IMPORT[导入依赖<br/>configparser · json · openai<br/>+ 平台/系统库]
+
+    IMPORT --> READ_CFG["📖 读取 config.ini<br/>config.read('config.ini')"]
+
+    READ_CFG --> BUILD_CLIENT["🔧 构建 OpenAI Client<br/>base_url=config['llm']['base_url']<br/>api_key=config['llm']['api_key']<br/>model=config['llm']['model']"]
+
+    BUILD_CLIENT --> DEF_TOOLS["📐 定义 Tool Schemas<br/>tools = [{type:'function', function:{...}}, ...]"]
+
+    DEF_TOOLS --> BUILD_MAP["🗺️ 构建 tool_map<br/>tool_map = {'name': func, ...}"]
+
+    BUILD_MAP --> INIT_MSG["📝 初始化消息列表<br/>messages = []"]
+
+    INIT_MSG --> L1{"🔁 第一层循环<br/>while True<br/>（用户会话循环）"}
+
+    L1 --> USER_INPUT["⌨️ 等待用户输入<br/>user_input = input('你: ')"]
+    USER_INPUT --> ADD_USER["📥 messages.append<br/>{'role':'user',<br/> 'content': user_input}"]
+
+    ADD_USER --> L2{"🔁 第二层循环<br/>while True<br/>（工具调用链循环）"}
+
+    L2 --> STREAM_CALL["🌊 流式 LLM 调用<br/>client.chat.completions.create(<br/>  model=model,<br/>  messages=messages,<br/>  tools=tools,<br/>  stream=True<br/>)"]
+
+    STREAM_CALL --> CHUNK_LOOP{"📦 遍历 chunk<br/>(第三层: 流消费循环)"}
+
+    CHUNK_LOOP --> PARSE_DELTA["解析 delta = chunk.choices[0].delta"]
+
+    PARSE_DELTA --> CHECK_TYPE{"delta 内容类型?"}
+
+    CHECK_TYPE -->|"delta.content"| PRINT_TEXT["🖨️ 实时打印文本<br/>print(content, end='')"]
+    PRINT_TEXT --> ACCUM_TEXT["content += delta.content"]
+
+    CHECK_TYPE -->|"delta.tool_calls"| MERGE_TC["🔀 合并 tool_calls<br/>tool_calls.setdefault(index)<br/>聚合 id · name · arguments"]
+
+    ACCUM_TEXT --> NEXT_CHUNK{"还有更多 chunk?"}
+    MERGE_TC --> NEXT_CHUNK
+
+    NEXT_CHUNK -->|"✅ 是"| CHUNK_LOOP
+    NEXT_CHUNK -->|"❌ 否<br/>流结束"| HAS_TC{"tool_calls<br/>非空?"}
+
+    HAS_TC -->|"❌ 否<br/>纯文本回复"| ADD_ASSIST["📤 messages.append<br/>{'role':'assistant',<br/> 'content': content}"]
+    ADD_ASSIST --> L1
+
+    HAS_TC -->|"✅ 是<br/>需要调用工具"| BUILD_TCS["🔨 构建 assistant_tool_calls<br/>[{id, type:'function',<br/>  function:{name, arguments}}, ...]"]
+
+    BUILD_TCS --> ADD_ASSIST_TC["📤 messages.append<br/>{'role':'assistant',<br/> 'content': content or None,<br/> 'tool_calls': assistant_tool_calls}"]
+
+    ADD_ASSIST_TC --> DISPATCH_LOOP{"🔁 遍历每个 tool_call"}
+
+    DISPATCH_LOOP --> PARSE_ARGS["📋 json.loads<br/>解析 arguments JSON"]
+
+    PARSE_ARGS --> DISPATCH["🎯 tool_map[name](**args)<br/>按函数名分发执行"]
+
+    DISPATCH --> EXEC_TOOL["⚡ 执行工具函数<br/>返回 output 字符串"]
+
+    EXEC_TOOL --> PRINT_RESULT["🖨️ 打印执行结果<br/>[tool] name → output"]
+
+    PRINT_RESULT --> ADD_TOOL_MSG["📤 messages.append<br/>{'role':'tool',<br/> 'tool_call_id': tc['id'],<br/> 'content': str(output)}"]
+
+    ADD_TOOL_MSG --> MORE_TC{"还有更多<br/>tool_call?"}
+    MORE_TC -->|"✅ 是"| DISPATCH_LOOP
+    MORE_TC -->|"❌ 否"| L2
+
+    style START fill:#1B5E20,color:#fff
+    style READ_CFG fill:#1565C0,color:#fff
+    style BUILD_CLIENT fill:#1565C0,color:#fff
+    style DEF_TOOLS fill:#6A1B9A,color:#fff
+    style BUILD_MAP fill:#6A1B9A,color:#fff
+    style L1 fill:#E65100,color:#fff
+    style L2 fill:#BF360C,color:#fff
+    style STREAM_CALL fill:#0D47A1,color:#fff
+    style CHUNK_LOOP fill:#00838F,color:#fff
+    style DISPATCH fill:#F57F17,color:#000
+    style EXEC_TOOL fill:#2E7D32,color:#fff
+    style HAS_TC fill:#C62828,color:#fff
+    style ADD_ASSIST fill:#37474F,color:#fff
+    style ADD_TOOL_MSG fill:#37474F,color:#fff
+
+
+═══════════════════════════════════════════════════════════════════════
+ 图 3：三脚本工具全景图（13 个工具总览）
+═══════════════════════════════════════════════════════════════════════
+
+graph LR
+    subgraph SCRIPT_A["chat-stream.tool.getDate.py"]
+        A1["① getDate<br/>跨平台日期获取<br/>Windows: PowerShell<br/>Unix: date 命令"]
+    end
+
+    subgraph SCRIPT_B["chat-stream.tool.getDate+isLeapYear.py"]
+        B1["① getDate<br/>跨平台日期获取"]
+        B2["② isLeapYear<br/>数学计算<br/>(year%4==0 ∧<br/> year%100≠0 ∨<br/> year%400==0)"]
+    end
+
+    subgraph SCRIPT_C["chat-stream.tool.fileOps.py"]
+        C1["① getcwd<br/>os.getcwd()"]
+        C2["② listdir<br/>pathlib.iterdir()"]
+        C3["③ getFileType<br/>扩展名+纯文本检测"]
+        C4["④ readFile<br/>UTF-8 读取"]
+        C5["⑤ createFile<br/>mkdir+写入"]
+        C6["⑥ writeFile<br/>覆盖写入"]
+        C7["⑦ mkdir<br/>mkdir(parents=True)"]
+        C8["⑧ rmdir<br/>shutil.rmtree()"]
+        C9["⑨ rmFile<br/>Path.unlink()"]
+        C10["⑩ rename<br/>Path.rename()"]
+    end
+
+    style SCRIPT_A fill:#37474F,color:#fff
+    style SCRIPT_B fill:#455A64,color:#fff
+    style SCRIPT_C fill:#546E7A,color:#fff
+    style A1 fill:#00897B,color:#fff
+    style B1 fill:#00897B,color:#fff
+    style B2 fill:#3949AB,color:#fff
+    style C1 fill:#00897B,color:#fff
+    style C2 fill:#00897B,color:#fff
+    style C3 fill:#00897B,color:#fff
+    style C4 fill:#00897B,color:#fff
+    style C5 fill:#00897B,color:#fff
+    style C6 fill:#00897B,color:#fff
+    style C7 fill:#00897B,color:#fff
+    style C8 fill:#00897B,color:#fff
+    style C9 fill:#00897B,color:#fff
+    style C10 fill:#00897B,color:#fff
+
+
+═══════════════════════════════════════════════════════════════════════
+ 图 4：Tool Schema → tool_map 映射关系
+═══════════════════════════════════════════════════════════════════════
+
+flowchart LR
+    subgraph LLM_SIDE["🧠 LLM 侧"]
+        DECISION["模型决定调用哪个函数"]
+        OUTPUT_JSON["输出 function.name<br/>+ function.arguments (JSON)"]
+    end
+
+    subgraph CLIENT_SIDE["💻 客户端侧"]
+        SCHEMA["tools = [<br/>  {type:'function',<br/>   function: {<br/>     name: '...',<br/>     description: '...',<br/>     parameters: {...}<br/>   }<br/>  }, ...<br/>]"]
+        MAP["tool_map = {<br/>  'getcwd': getcwd,<br/>  'listdir': listdir,<br/>  'getFileType': getFileType,<br/>  'readFile': readFile,<br/>  'createFile': createFile,<br/>  'writeFile': writeFile,<br/>  'mkdir': mkdir,<br/>  'rmdir': rmdir,<br/>  'rmFile': rmFile,<br/>  'rename': rename,<br/>  'getDate': getDate,<br/>  'isLeapYear': isLeapYear<br/>}"]
+        INVOKE["tool_map[name](**args)"]
+    end
+
+    DECISION -->|"匹配"| SCHEMA
+    OUTPUT_JSON -->|"解析"| INVOKE
+    SCHEMA -.->|"定义"| MAP
+    MAP --> INVOKE
+
+    style LLM_SIDE fill:#0D47A1,color:#fff
+    style CLIENT_SIDE fill:#1B5E20,color:#fff
+    style DECISION fill:#F57F17,color:#000
+    style OUTPUT_JSON fill:#F57F17,color:#000
+    style SCHEMA fill:#6A1B9A,color:#fff
+    style MAP fill:#4A148C,color:#fff
+    style INVOKE fill:#2E7D32,color:#fff
+
+
+═══════════════════════════════════════════════════════════════════════
+ 图 5：数据流与消息累积模型
+═══════════════════════════════════════════════════════════════════════
+
+sequenceDiagram
+    participant U as 👤 用户
+    participant S as 🐍 Python 脚本
+    participant L as 🧠 LLM API
+    participant T as ⚡ 工具函数
+    participant FS as 💾 文件系统
+
+    Note over S: messages = []
+
+    U->>S: 输入自然语言指令
+    S->>S: messages.append({role:'user', content})
+
+    loop 工具调用链（可能多轮）
+        S->>L: POST chat/completions (stream)<br/>messages + tools
+        L-->>S: SSE 流式响应 (chunks)
+
+        alt 纯文本回复
+            S->>S: messages.append({role:'assistant', content})
+        else 含 tool_calls
+            S->>S: messages.append({role:'assistant', content, tool_calls})
+            S->>T: tool_map[name](**json.loads(arguments))
+            T->>FS: 操作系统调用
+            FS-->>T: 返回结果
+            T-->>S: output 字符串
+            S->>S: messages.append({role:'tool', tool_call_id, content})
+            Note over S: 回到内层循环，继续调用 LLM
+        end
+    end
+
+    S->>U: 打印最终 AI 回复
