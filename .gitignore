@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# PyInstaller / 打包产物
+dist/
+build/
+*.spec
+
+# 项目运行时（会话、压缩归档、技能数据）
+.agents/sessions/
+.agents/context/
+.agents/skills/*/references/
+.agents/skills/*/scripts/
+
+# 配置（含密钥）
+prist/config.ini
+.mcp.json
+
+# 其他项目的临时文件
+fix/
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 压缩包
+*.zip
+*.tar.gz
+*.rar

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>AnythingLLM 文档上传与向量化嵌入</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 24px; }
+  input, button, pre { font-size: 14px; }
+  pre { background: #f4f4f4; padding: 12px; white-space: pre-wrap; word-break: break-all; max-width: 760px; }
+  button { padding: 6px 12px; }
+</style>
+</head>
+<body>
+  <input type="file" id="file">
+  <button id="btn">上传并嵌入</button>
+  <pre id="status"></pre>
+
+<script>
+const API_BASE = "http://localhost:3001/api";
+const API_KEY  = "N70AXT2-NVEMVF5-NTQAX30-E326EMB";
+const headers  = { Authorization: "Bearer " + API_KEY };
+
+const fileInput = document.getElementById("file");
+const btn       = document.getElementById("btn");
+const status    = document.getElementById("status");
+
+const set = (t) => status.textContent = t;
+
+btn.addEventListener("click", async () => {
+  if (!fileInput.files.length) { alert("请先选择文档"); return; }
+  btn.disabled = true;
+  try {
+    set("正在获取工作区列表...");
+    const r1 = await fetch(`${API_BASE}/v1/workspaces`, { headers });
+    if (!r1.ok) throw new Error(`获取工作区失败：HTTP ${r1.status}`);
+    const d1 = await r1.json();
+    const slug = d1.workspaces && d1.workspaces[0] && d1.workspaces[0].slug;
+    if (!slug) { set("未找到任何工作区"); return; }
+
+    set(`正在上传并嵌入到工作区「${slug}」...`);
+    const form = new FormData();
+    form.append("file", fileInput.files[0]);
+    form.append("addToWorkspaces", slug);
+
+    const r2 = await fetch(`${API_BASE}/v1/document/upload`, {
+      method: "POST", headers, body: form
+    });
+    const d2 = await r2.json().catch(() => ({}));
+    if (!r2.ok || !d2.success) {
+      throw new Error(`上传失败：HTTP ${r2.status} ${d2.error || r2.statusText || ""}`);
+    }
+    const doc = d2.documents && d2.documents[0] || {};
+    set(
+      "上传并嵌入成功\n\n" +
+      "name: " + doc.name + "\n" +
+      "title: " + doc.title + "\n" +
+      "location: " + doc.location + "\n" +
+      "wordCount: " + doc.wordCount + "\n" +
+      "token_count_estimate: " + doc.token_count_estimate
+    );
+  } catch (e) {
+    set("出错：" + e.message + "\n\n请确认：\n1) AnythingLLM Server 已在 localhost:3001 运行；\n2) 若控制台报 CORS/preflight 错误，需启用 Node 代理回退方案。");
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
