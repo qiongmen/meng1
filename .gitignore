@@ -1,33 +1,45 @@
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
+*.egg
 .venv/
 venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # PyInstaller / 打包产物
 dist/
 build/
 *.spec
 
-# 项目运行时（会话、压缩归档、技能数据）
+# 项目运行时（会话、压缩归档）
 .agents/sessions/
 .agents/context/
 .agents/skills/*/references/
 .agents/skills/*/scripts/
+.trae/
 
 # 配置（含密钥）
 prist/config.ini
 .mcp.json
+.env
+.env.*
+*.local
 
 # 其他项目的临时文件
 fix/
 
-# IDE
-.idea/
-.vscode/
+# OS
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
 
 # 压缩包
 *.zip
